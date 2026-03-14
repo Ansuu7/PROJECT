@@ -42,11 +42,23 @@ body {
     display: flex;
     gap: 0.6rem;
     margin-bottom: 1rem;
+    align-items: center;
 }
 
 .view-switch .btn[aria-selected="false"] {
     background: #fff;
     color: var(--text);
+}
+
+.session-role {
+    margin-left: auto;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--muted);
 }
 
 .dashboard-view {
@@ -288,6 +300,45 @@ select {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
+}
+
+.chat-list {
+    list-style: none;
+    margin: 0 0 0.6rem;
+    padding: 0;
+    display: grid;
+    gap: 0.45rem;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.chat-item {
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    padding: 0.45rem 0.55rem;
+    font-size: 0.9rem;
+    background: #f8faff;
+}
+
+.chat-item.patient {
+    border-left: 4px solid #4f7df0;
+}
+
+.chat-item.caretaker {
+    border-left: 4px solid #0f8e58;
+}
+
+.chat-meta {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 0.2rem;
+}
+
+.chat-form {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem;
+    align-items: center;
 }
 
 .quick-actions {

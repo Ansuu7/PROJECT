@@ -27,6 +27,8 @@
             <button id="patientTab" class="btn btn-primary" type="button" aria-selected="true">Patient
                 Dashboard</button>
             <button id="caretakerTab" class="btn" type="button" aria-selected="false">Caretaker Dashboard</button>
+            <span id="sessionRole" class="session-role"></span>
+            <button id="logoutBtn" class="btn" type="button">Logout</button>
         </nav>
 
         <section id="patientDashboard" class="dashboard-view active" aria-label="Patient dashboard">
@@ -55,36 +57,8 @@
                         <h2 id="taskPanelTitle">Reminders & Tasks</h2>
                     </div>
 
-                    <form id="taskForm" class="task-form">
-                        <label>
-                            Task Type
-                            <select id="taskType" required>
-                                <option value="medication">Medication</option>
-                                <option value="appointment">Doctor Appointment</option>
-                                <option value="water">Drink Water</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </label>
-                        <label>
-                            Task Name
-                            <input id="taskTitle" type="text" required placeholder="e.g., Blood pressure tablet"
-                                maxlength="80" />
-                        </label>
-                        <label>
-                            Due Time
-                            <input id="taskDue" type="text" required placeholder="Select date and time"
-                                autocomplete="off" />
-                        </label>
-                        <label>
-                            Priority
-                            <select id="taskPriority" required>
-                                <option value="low">Low</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="high">High</option>
-                            </select>
-                        </label>
-                        <button type="submit" class="btn btn-primary">Add Reminder</button>
-                    </form>
+                    <p class="task-meta">Patients can only mark tasks as done or missed. Task creation and reset are
+                        caretaker-only.</p>
 
                     <ul id="taskList" class="task-list" aria-live="polite"></ul>
                 </section>
@@ -105,6 +79,16 @@
                         <p class="caretaker-name">Ansuu Sharma</p>
                         <p id="caretakerUpdate" class="status-text">No action needed right now.</p>
                         <button id="manualCheckIn" class="btn btn-secondary" type="button">Send Manual Check-In</button>
+                    </article>
+
+                    <article class="status-box">
+                        <p class="label">Message Caretaker</p>
+                        <ul id="patientChatList" class="chat-list" aria-live="polite"></ul>
+                        <form id="patientMessageForm" class="chat-form">
+                            <input id="patientMessageInput" type="text" maxlength="200"
+                                placeholder="Type message for caretaker..." required />
+                            <button class="btn btn-primary" type="submit">Send</button>
+                        </form>
                     </article>
 
                     <article class="status-box">
@@ -142,6 +126,41 @@
                     </div>
                     <ul id="alertsQueue" class="task-list" aria-live="polite"></ul>
 
+                    <article class="status-box">
+                        <p class="label">Task Management</p>
+                        <form id="taskForm" class="task-form">
+                            <label>
+                                Task Type
+                                <select id="taskType" required>
+                                    <option value="medication">Medication</option>
+                                    <option value="appointment">Doctor Appointment</option>
+                                    <option value="water">Drink Water</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </label>
+                            <label>
+                                Task Name
+                                <input id="taskTitle" type="text" required placeholder="e.g., Blood pressure tablet"
+                                    maxlength="80" />
+                            </label>
+                            <label>
+                                Due Time
+                                <input id="taskDue" type="text" required placeholder="Select date and time"
+                                    autocomplete="off" />
+                            </label>
+                            <label>
+                                Priority
+                                <select id="taskPriority" required>
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </label>
+                            <button type="submit" class="btn btn-primary">Add Reminder</button>
+                        </form>
+                        <ul id="careTaskManager" class="task-list" aria-live="polite"></ul>
+                    </article>
+
                     <div class="panel-header timeline-header">
                         <h2 id="timelineTitle">Patient Timeline</h2>
                     </div>
@@ -174,6 +193,16 @@
                     </article>
 
                     <article class="status-box">
+                        <p class="label">Patient Chat</p>
+                        <ul id="caretakerChatList" class="chat-list" aria-live="polite"></ul>
+                        <form id="caretakerMessageForm" class="chat-form">
+                            <input id="caretakerMessageInput" type="text" maxlength="200"
+                                placeholder="Reply to patient..." required />
+                            <button class="btn btn-primary" type="submit">Reply</button>
+                        </form>
+                    </article>
+
+                    <article class="status-box">
                         <p class="label">Communication Log</p>
                         <ul id="communicationLog" class="notification-feed" aria-live="polite"></ul>
                     </article>
@@ -182,6 +211,7 @@
         </section>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="frontend-config.js"></script>
     <script src="index.js"></script>
 </body>
 

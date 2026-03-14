@@ -1,0 +1,5 @@
+node_modules/
+memory_aid.db
+sessions.db
+.env
+npm-debug.log*

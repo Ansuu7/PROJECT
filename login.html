@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login | Digital Memory Aid</title>
+    <link rel="stylesheet" href="login.css" />
+</head>
+
+<body>
+    <main class="login-page">
+        <section class="login-card" aria-labelledby="loginTitle">
+            <h1 id="loginTitle">Digital Memory Aid</h1>
+            <p class="subtitle">Login to continue to your dashboard</p>
+
+            <form id="loginForm" class="login-form">
+                <label>
+                    Username
+                    <input id="username" type="text" placeholder="Enter username" required />
+                </label>
+                <label>
+                    Password
+                    <input id="password" type="password" placeholder="Enter password" required />
+                </label>
+                <button type="submit">Login</button>
+            </form>
+
+            <p id="loginError" class="error" aria-live="polite"></p>
+
+            <div class="demo-box">
+                <p><strong>Patient:</strong> patient1 / patient123</p>
+                <p><strong>Caretaker:</strong> caretaker1 / caretaker123</p>
+            </div>
+        </section>
+    </main>
+    <script src="frontend-config.js"></script>
+    <script src="login.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: digital-memory-aid
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: FRONTEND_ORIGIN
+        value: https://ansuu7.github.io
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: app-data
+      mountPath: /var/data
+      sizeGB: 1

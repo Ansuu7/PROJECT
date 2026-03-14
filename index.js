@@ -8,6 +8,8 @@ const patientTab = document.getElementById("patientTab");
 const caretakerTab = document.getElementById("caretakerTab");
 const patientDashboard = document.getElementById("patientDashboard");
 const caretakerDashboard = document.getElementById("caretakerDashboard");
+const logoutBtn = document.getElementById("logoutBtn");
+const sessionRole = document.getElementById("sessionRole");
 
 const tasksToday = document.getElementById("tasksToday");
 const tasksCompleted = document.getElementById("tasksCompleted");
@@ -21,6 +23,9 @@ const notificationFeed = document.getElementById("notificationFeed");
 const manualCheckIn = document.getElementById("manualCheckIn");
 const currentTime = document.getElementById("currentTime");
 const currentDate = document.getElementById("currentDate");
+const patientMessageForm = document.getElementById("patientMessageForm");
+const patientMessageInput = document.getElementById("patientMessageInput");
+const patientChatList = document.getElementById("patientChatList");
 
 const careTasksTotal = document.getElementById("careTasksTotal");
 const careTasksCompleted = document.getElementById("careTasksCompleted");
@@ -32,6 +37,15 @@ const careEscalationBadge = document.getElementById("careEscalationBadge");
 const careEscalationReason = document.getElementById("careEscalationReason");
 const quickActions = document.getElementById("quickActions");
 const communicationLog = document.getElementById("communicationLog");
+const careTaskManager = document.getElementById("careTaskManager");
+const caretakerChatList = document.getElementById("caretakerChatList");
+const caretakerMessageForm = document.getElementById("caretakerMessageForm");
+const caretakerMessageInput = document.getElementById("caretakerMessageInput");
+const apiBase = (window.APP_CONFIG && window.APP_CONFIG.API_BASE ? window.APP_CONFIG.API_BASE : "").replace(/\/$/, "");
+const loginPageHref = window.location.pathname.endsWith("/index.html")
+    ? "./login.html"
+    : "/";
+
 let taskDuePicker = null;
 
 const STATUS = {
@@ -49,56 +63,44 @@ const ESCALATION = {
 
 const HIGH_PRIORITY_RESPONSE_WINDOW_MS = 10 * 60 * 1000;
 
-let tasks = [
-    {
-        id: crypto.randomUUID(),
-        type: "medication",
-        title: "Blood pressure tablet",
-        dueAt: getTodayAtTime(9, 0),
-        priority: "high",
-        status: STATUS.PENDING,
-        deadlineAlerted: false,
-        caretakerEscalated: false,
-        updatedAt: Date.now()
-    },
-    {
-        id: crypto.randomUUID(),
-        type: "water",
-        title: "Drink 1 glass of water",
-        dueAt: getTodayAtTime(11, 30),
-        priority: "low",
-        status: STATUS.PENDING,
-        deadlineAlerted: false,
-        caretakerEscalated: false,
-        updatedAt: Date.now()
-    },
-    {
-        id: crypto.randomUUID(),
-        type: "appointment",
-        title: "Doctor follow-up call",
-        dueAt: getTodayAtTime(17, 0),
-        priority: "medium",
-        status: STATUS.PENDING,
-        deadlineAlerted: false,
-        caretakerEscalated: false,
-        updatedAt: Date.now()
-    }
-];
-
+let tasks = [];
+let chatMessages = [];
 let notifications = [];
 let caretakerLogs = [];
 let escalationLevel = ESCALATION.NORMAL;
+let currentView = "patient";
+let currentRole = "";
 
 patientTab.addEventListener("click", () => {
+    if (currentRole === "caretaker") {
+        return;
+    }
     setActiveView("patient");
 });
 
 caretakerTab.addEventListener("click", () => {
+    if (currentRole === "patient") {
+        return;
+    }
     setActiveView("caretaker");
 });
 
-taskForm.addEventListener("submit", (event) => {
+logoutBtn.addEventListener("click", async () => {
+    try {
+        await fetch(`${apiBase}/api/logout`, { method: "POST", credentials: "include" });
+    } finally {
+        window.location.href = loginPageHref;
+    }
+});
+
+taskForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+
+    if (currentRole !== "caretaker") {
+        addNotification("Only caretaker can add tasks.");
+        renderNotifications();
+        return;
+    }
 
     const selectedDueDate = getSelectedDueDate();
     const titleValue = taskTitle.value.trim();
@@ -106,7 +108,8 @@ taskForm.addEventListener("submit", (event) => {
         return;
     }
 
-    const newTask = {
+    const now = Date.now();
+    const payload = {
         id: crypto.randomUUID(),
         type: taskType.value,
         title: titleValue,
@@ -115,22 +118,29 @@ taskForm.addEventListener("submit", (event) => {
         status: STATUS.PENDING,
         deadlineAlerted: false,
         caretakerEscalated: false,
-        updatedAt: Date.now()
+        updatedAt: now,
+        createdAt: now
     };
 
-    tasks.unshift(newTask);
+    await fetchJson("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
     taskForm.reset();
     if (taskDuePicker) {
         taskDuePicker.clear();
     }
-    addNotification(`New ${readableType(newTask.type)} reminder added: ${newTask.title}`);
-    evaluateTaskStatuses();
+
+    addNotification(`New ${readableType(payload.type)} reminder added: ${payload.title}`);
+    await loadTasks();
     render();
 });
 
-taskList.addEventListener("click", (event) => {
+taskList.addEventListener("click", async (event) => {
     const actionButton = event.target.closest("button[data-action]");
-    if (!actionButton) {
+    if (!actionButton || currentRole !== "patient") {
         return;
     }
 
@@ -142,39 +152,103 @@ taskList.addEventListener("click", (event) => {
     }
 
     if (action === "complete") {
-        selectedTask.status = STATUS.COMPLETED;
-        selectedTask.updatedAt = Date.now();
+        await updateTaskOnServer(selectedTask, {
+            status: STATUS.COMPLETED,
+            deadlineAlerted: selectedTask.deadlineAlerted,
+            caretakerEscalated: selectedTask.caretakerEscalated
+        });
         addNotification(`Task completed: ${selectedTask.title}`);
     }
 
     if (action === "missed") {
-        selectedTask.status = STATUS.MISSED;
-        selectedTask.updatedAt = Date.now();
+        await updateTaskOnServer(selectedTask, {
+            status: STATUS.MISSED,
+            deadlineAlerted: selectedTask.deadlineAlerted,
+            caretakerEscalated: selectedTask.caretakerEscalated
+        });
         addNotification(`Task missed: ${selectedTask.title}`);
     }
 
-    if (action === "reset") {
-        selectedTask.status = STATUS.PENDING;
-        selectedTask.deadlineAlerted = false;
-        selectedTask.caretakerEscalated = false;
-        selectedTask.updatedAt = Date.now();
-        addNotification(`Task reset to pending: ${selectedTask.title}`);
+    await loadTasks();
+    render();
+});
+
+careTaskManager.addEventListener("click", async (event) => {
+    const actionButton = event.target.closest("button[data-care-task-action]");
+    if (!actionButton || currentRole !== "caretaker") {
+        return;
     }
 
-    evaluateTaskStatuses();
-    render();
+    const taskId = actionButton.dataset.id;
+    const action = actionButton.dataset.careTaskAction;
+    const selectedTask = tasks.find((task) => task.id === taskId);
+    if (!selectedTask) {
+        return;
+    }
+
+    if (action === "reset") {
+        await updateTaskOnServer(selectedTask, {
+            status: STATUS.PENDING,
+            deadlineAlerted: false,
+            caretakerEscalated: false
+        });
+
+        addCaretakerLog(`Caretaker reset task: ${selectedTask.title}`);
+        addNotification(`Task reset to pending by caretaker: ${selectedTask.title}`);
+        await loadTasks();
+        render();
+    }
 });
 
 manualCheckIn.addEventListener("click", () => {
     addNotification("Manual check-in sent to caretaker.");
     addCaretakerLog("Patient requested manual check-in support.");
     caretakerUpdate.textContent = "Caretaker has been prompted for a live check-in.";
-    render();
+    renderNotifications();
+    renderCommunicationLog();
+});
+
+patientMessageForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (currentRole !== "patient") {
+        return;
+    }
+
+    const message = patientMessageInput.value.trim();
+    if (!message) {
+        return;
+    }
+
+    await sendChatMessage(message);
+    addCaretakerLog(`New patient message: ${message}`);
+    patientMessageForm.reset();
+    await loadMessages();
+    renderChat();
+    renderCommunicationLog();
+});
+
+caretakerMessageForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (currentRole !== "caretaker") {
+        return;
+    }
+
+    const message = caretakerMessageInput.value.trim();
+    if (!message) {
+        return;
+    }
+
+    await sendChatMessage(message);
+    addNotification("Caretaker replied in chat.");
+    caretakerMessageForm.reset();
+    await loadMessages();
+    renderChat();
+    renderNotifications();
 });
 
 quickActions.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-care-action]");
-    if (!button) {
+    if (!button || currentRole !== "caretaker") {
         return;
     }
 
@@ -199,57 +273,146 @@ quickActions.addEventListener("click", (event) => {
         addNotification("Critical escalation: emergency contact protocol initiated.");
     }
 
-    render();
+    renderNotifications();
+    renderCommunicationLog();
 });
 
-function evaluateTaskStatuses() {
-    const now = Date.now();
+async function initializeApp() {
+    try {
+        const session = await fetchJson("/api/session");
+        currentRole = session.user.role;
+        sessionRole.textContent = `${session.user.fullName} (${currentRole.toUpperCase()})`;
 
-    tasks = tasks.map((task) => {
+        if (currentRole === "patient") {
+            caretakerTab.style.display = "none";
+            setActiveView("patient");
+        } else {
+            patientTab.style.display = "none";
+            setActiveView("caretaker");
+        }
+
+        initializeDueDatePicker();
+        addNotification("System initialized. Caretaker monitoring is active.");
+        addCaretakerLog("Caretaker dashboard monitoring started.");
+
+        await refreshData();
+
+        setInterval(() => {
+            renderClock();
+        }, 1000);
+
+        setInterval(async () => {
+            await evaluateTaskStatuses();
+            await refreshData();
+        }, 5 * 1000);
+    } catch (_error) {
+        window.location.href = loginPageHref;
+    }
+}
+
+async function refreshData() {
+    await Promise.all([loadTasks(), loadMessages()]);
+    render();
+}
+
+async function loadTasks() {
+    const data = await fetchJson("/api/tasks");
+    tasks = data.tasks || [];
+}
+
+async function loadMessages() {
+    const data = await fetchJson("/api/messages");
+    chatMessages = data.messages || [];
+}
+
+async function evaluateTaskStatuses() {
+    const now = Date.now();
+    const updates = [];
+
+    for (const task of tasks) {
         if (task.status === STATUS.COMPLETED || task.status === STATUS.MISSED) {
-            return task;
+            continue;
         }
 
         const due = new Date(task.dueAt).getTime();
         const highPriority = isHighPriority(task);
 
         if (highPriority && now >= due + HIGH_PRIORITY_RESPONSE_WINDOW_MS) {
-            const missedTask = {
-                ...task,
-                status: STATUS.MISSED
-            };
+            if (!task.caretakerEscalated || task.status !== STATUS.MISSED) {
+                updates.push(
+                    updateTaskOnServer(task, {
+                        status: STATUS.MISSED,
+                        deadlineAlerted: true,
+                        caretakerEscalated: true
+                    })
+                );
 
-            if (!task.caretakerEscalated) {
-                handleHighPriorityNoResponse(task);
-                missedTask.caretakerEscalated = true;
-                missedTask.updatedAt = Date.now();
+                if (!task.caretakerEscalated) {
+                    handleHighPriorityNoResponse(task);
+                }
             }
-
-            return missedTask;
+            continue;
         }
 
-        if (now >= due) {
-            const overdueTask = {
-                ...task,
-                status: STATUS.OVERDUE
-            };
+        if (now >= due && task.status !== STATUS.OVERDUE) {
+            updates.push(
+                updateTaskOnServer(task, {
+                    status: STATUS.OVERDUE,
+                    deadlineAlerted: true,
+                    caretakerEscalated: task.caretakerEscalated
+                })
+            );
 
             if (!task.deadlineAlerted) {
                 handleTaskDeadlineExpiry(task);
-                overdueTask.deadlineAlerted = true;
-                overdueTask.updatedAt = Date.now();
             }
-
-            return overdueTask;
         }
+    }
 
-        return {
-            ...task,
-            status: STATUS.PENDING,
-            deadlineAlerted: task.deadlineAlerted || false,
-            caretakerEscalated: task.caretakerEscalated || false
-        };
+    if (updates.length > 0) {
+        await Promise.all(updates);
+    }
+}
+
+async function updateTaskOnServer(task, update) {
+    await fetchJson(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            status: update.status,
+            deadlineAlerted: update.deadlineAlerted,
+            caretakerEscalated: update.caretakerEscalated,
+            updatedAt: Date.now()
+        })
     });
+}
+
+async function sendChatMessage(message) {
+    await fetchJson("/api/messages", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            id: crypto.randomUUID(),
+            message,
+            createdAt: Date.now()
+        })
+    });
+}
+
+async function fetchJson(url, options = {}) {
+    const response = await fetch(`${apiBase}${url}`, {
+        credentials: "include",
+        ...options
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(data.error || "Request failed");
+    }
+    return data;
 }
 
 function updateEscalationState() {
@@ -300,30 +463,54 @@ function renderTaskList() {
     taskList.innerHTML = sorted
         .map((task) => {
             const isClosed = task.status === STATUS.COMPLETED || task.status === STATUS.MISSED;
-            const dueText = new Date(task.dueAt).toLocaleString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-                day: "2-digit",
-                month: "short"
-            });
+            const dueText = formatDue(task.dueAt);
 
             return `
-			<li class="task-item">
-				<div class="task-top">
-					<div>
-						<p class="task-title">${escapeHtml(task.title)}</p>
+            <li class="task-item">
+                <div class="task-top">
+                    <div>
+                        <p class="task-title">${escapeHtml(task.title)}</p>
                         <p class="task-meta">${readableType(task.type)} • ${readablePriority(task.priority)} Priority • Due ${dueText}</p>
                         <p class="task-priority ${normalizePriority(task.priority)}">${readablePriority(task.priority).toUpperCase()} PRIORITY</p>
-					</div>
-					<p class="task-status ${task.status}">${task.status.toUpperCase()}</p>
-				</div>
-				<div class="task-actions">
-					<button class="btn btn-primary" data-action="complete" data-id="${task.id}" ${isClosed ? "disabled" : ""}>Done</button>
-					<button class="btn" data-action="missed" data-id="${task.id}" ${isClosed ? "disabled" : ""}>Mark Missed</button>
-					<button class="btn" data-action="reset" data-id="${task.id}">Reset</button>
-				</div>
-			</li>
-			`;
+                    </div>
+                    <p class="task-status ${task.status}">${task.status.toUpperCase()}</p>
+                </div>
+                <div class="task-actions">
+                    <button class="btn btn-primary" data-action="complete" data-id="${task.id}" ${isClosed || currentRole !== "patient" ? "disabled" : ""}>Done</button>
+                    <button class="btn" data-action="missed" data-id="${task.id}" ${isClosed || currentRole !== "patient" ? "disabled" : ""}>Mark Missed</button>
+                </div>
+            </li>
+            `;
+        })
+        .join("");
+}
+
+function renderCaretakerTaskManager() {
+    if (!tasks.length) {
+        careTaskManager.innerHTML = "<li class='task-item'>No tasks available for caretaker management.</li>";
+        return;
+    }
+
+    const sorted = [...tasks].sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
+
+    careTaskManager.innerHTML = sorted
+        .map((task) => {
+            const dueText = formatDue(task.dueAt);
+
+            return `
+            <li class="task-item">
+                <div class="task-top">
+                    <div>
+                        <p class="task-title">${escapeHtml(task.title)}</p>
+                        <p class="task-meta">${readableType(task.type)} • ${readablePriority(task.priority)} Priority • Due ${dueText}</p>
+                    </div>
+                    <p class="task-status ${task.status}">${task.status.toUpperCase()}</p>
+                </div>
+                <div class="task-actions">
+                    <button class="btn" data-care-task-action="reset" data-id="${task.id}" ${currentRole !== "caretaker" ? "disabled" : ""}>Reset</button>
+                </div>
+            </li>
+            `;
         })
         .join("");
 }
@@ -349,7 +536,7 @@ function addNotification(message) {
         createdAt: Date.now()
     });
 
-    notifications = notifications.slice(0, 8);
+    notifications = notifications.slice(0, 10);
 }
 
 function addCaretakerLog(message) {
@@ -359,7 +546,7 @@ function addCaretakerLog(message) {
         createdAt: Date.now()
     });
 
-    caretakerLogs = caretakerLogs.slice(0, 10);
+    caretakerLogs = caretakerLogs.slice(0, 14);
 }
 
 function renderNotifications() {
@@ -371,14 +558,11 @@ function renderNotifications() {
     notificationFeed.innerHTML = notifications
         .map(
             (item) => `
-			<li class="notification-item">
-				<p>${escapeHtml(item.message)}</p>
-				<p class="notification-time">${new Date(item.createdAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit"
-            })}</p>
-			</li>
-		`
+            <li class="notification-item">
+                <p>${escapeHtml(item.message)}</p>
+                <p class="notification-time">${formatTime(item.createdAt)}</p>
+            </li>
+        `
         )
         .join("");
 }
@@ -398,12 +582,7 @@ function renderAlertsQueue() {
 
     alertsQueue.innerHTML = alerts
         .map((task) => {
-            const dueText = new Date(task.dueAt).toLocaleString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-                day: "2-digit",
-                month: "short"
-            });
+            const dueText = formatDue(task.dueAt);
 
             return `
             <li class="task-item">
@@ -421,7 +600,7 @@ function renderAlertsQueue() {
 function renderPatientTimeline() {
     const timeline = [...tasks]
         .sort((a, b) => b.updatedAt - a.updatedAt)
-        .slice(0, 8);
+        .slice(0, 10);
 
     if (!timeline.length) {
         patientTimeline.innerHTML = "<li class='notification-item'>No task history yet.</li>";
@@ -430,15 +609,10 @@ function renderPatientTimeline() {
 
     patientTimeline.innerHTML = timeline
         .map((task) => {
-            const timestamp = new Date(task.updatedAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit"
-            });
-
             return `
             <li class="notification-item">
                 <p>${escapeHtml(task.title)} marked as ${task.status.toUpperCase()}.</p>
-                <p class="notification-time">${timestamp}</p>
+                <p class="notification-time">${formatTime(task.updatedAt)}</p>
             </li>
             `;
         })
@@ -448,7 +622,7 @@ function renderPatientTimeline() {
 function renderCommunicationLog() {
     const mergedLog = [...caretakerLogs, ...notifications]
         .sort((a, b) => b.createdAt - a.createdAt)
-        .slice(0, 10);
+        .slice(0, 12);
 
     if (!mergedLog.length) {
         communicationLog.innerHTML = "<li class='notification-item'>No communications logged yet.</li>";
@@ -457,15 +631,10 @@ function renderCommunicationLog() {
 
     communicationLog.innerHTML = mergedLog
         .map((item) => {
-            const time = new Date(item.createdAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit"
-            });
-
             return `
             <li class="notification-item">
                 <p>${escapeHtml(item.message)}</p>
-                <p class="notification-time">${time}</p>
+                <p class="notification-time">${formatTime(item.createdAt)}</p>
             </li>
             `;
         })
@@ -487,9 +656,36 @@ function renderClock() {
     });
 }
 
+function renderChat() {
+    if (!chatMessages.length) {
+        const emptyMessage = "<li class='chat-item'>No messages yet.</li>";
+        patientChatList.innerHTML = emptyMessage;
+        caretakerChatList.innerHTML = emptyMessage;
+        return;
+    }
+
+    const chatMarkup = chatMessages
+        .map((entry) => {
+            const senderName = entry.senderName || (entry.sender === "patient" ? "Patient" : "Caretaker");
+
+            return `
+            <li class="chat-item ${entry.sender}">
+                <p class="chat-meta">${escapeHtml(senderName)} • ${formatTime(entry.createdAt)}</p>
+                <p>${escapeHtml(entry.message)}</p>
+            </li>
+            `;
+        })
+        .join("");
+
+    patientChatList.innerHTML = chatMarkup;
+    caretakerChatList.innerHTML = chatMarkup;
+}
+
 function render() {
     renderSummary();
     renderTaskList();
+    renderCaretakerTaskManager();
+    renderChat();
     updateEscalationState();
     renderNotifications();
     renderAlertsQueue();
@@ -500,6 +696,7 @@ function render() {
 
 function setActiveView(view) {
     const showPatient = view === "patient";
+    currentView = showPatient ? "patient" : "caretaker";
     patientDashboard.classList.toggle("active", showPatient);
     caretakerDashboard.classList.toggle("active", !showPatient);
 
@@ -608,12 +805,6 @@ function readableType(type) {
     return "Task";
 }
 
-function getTodayAtTime(hours, minutes) {
-    const date = new Date();
-    date.setHours(hours, minutes, 0, 0);
-    return date.toISOString();
-}
-
 function initializeDueDatePicker() {
     if (typeof flatpickr !== "function") {
         return;
@@ -642,8 +833,24 @@ function getSelectedDueDate() {
     return Number.isNaN(fallbackDate.getTime()) ? null : fallbackDate;
 }
 
+function formatDue(value) {
+    return new Date(value).toLocaleString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        day: "2-digit",
+        month: "short"
+    });
+}
+
+function formatTime(value) {
+    return new Date(value).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+}
+
 function escapeHtml(text) {
-    return text
+    return String(text)
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
@@ -651,17 +858,4 @@ function escapeHtml(text) {
         .replaceAll("'", "&#039;");
 }
 
-addNotification("System initialized. Caretaker monitoring is active.");
-addCaretakerLog("Caretaker dashboard monitoring started.");
-initializeDueDatePicker();
-evaluateTaskStatuses();
-render();
-
-setInterval(() => {
-    renderClock();
-}, 1000);
-
-setInterval(() => {
-    evaluateTaskStatuses();
-    render();
-}, 5 * 1000);
+initializeApp();
