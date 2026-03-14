@@ -31,6 +31,7 @@ const careEscalationBadge = document.getElementById("careEscalationBadge");
 const careEscalationReason = document.getElementById("careEscalationReason");
 const quickActions = document.getElementById("quickActions");
 const communicationLog = document.getElementById("communicationLog");
+let taskDuePicker = null;
 
 const STATUS = {
     PENDING: "pending",
@@ -87,8 +88,8 @@ caretakerTab.addEventListener("click", () => {
 taskForm.addEventListener("submit", (event) => {
     event.preventDefault();
 
-    const dueValue = taskDue.value;
-    if (!dueValue) {
+    const selectedDueDate = getSelectedDueDate();
+    if (!selectedDueDate) {
         return;
     }
 
@@ -96,13 +97,16 @@ taskForm.addEventListener("submit", (event) => {
         id: crypto.randomUUID(),
         type: taskType.value,
         title: taskTitle.value.trim(),
-        dueAt: new Date(dueValue).toISOString(),
+        dueAt: selectedDueDate.toISOString(),
         status: STATUS.PENDING,
         updatedAt: Date.now()
     };
 
     tasks.unshift(newTask);
     taskForm.reset();
+    if (taskDuePicker) {
+        taskDuePicker.clear();
+    }
     addNotification(`New ${readableType(newTask.type)} reminder added: ${newTask.title}`);
     evaluateTaskStatuses();
     render();
@@ -507,6 +511,34 @@ function getTodayAtTime(hours, minutes) {
     return date.toISOString();
 }
 
+function initializeDueDatePicker() {
+    if (typeof flatpickr !== "function") {
+        return;
+    }
+
+    taskDuePicker = flatpickr(taskDue, {
+        enableTime: true,
+        dateFormat: "Y-m-d H:i",
+        altInput: true,
+        altFormat: "F j, Y h:i K",
+        minDate: "today",
+        minuteIncrement: 5
+    });
+}
+
+function getSelectedDueDate() {
+    if (taskDuePicker && taskDuePicker.selectedDates.length > 0) {
+        return taskDuePicker.selectedDates[0];
+    }
+
+    if (!taskDue.value) {
+        return null;
+    }
+
+    const fallbackDate = new Date(taskDue.value);
+    return Number.isNaN(fallbackDate.getTime()) ? null : fallbackDate;
+}
+
 function escapeHtml(text) {
     return text
         .replaceAll("&", "&amp;")
@@ -518,6 +550,7 @@ function escapeHtml(text) {
 
 addNotification("System initialized. Caretaker monitoring is active.");
 addCaretakerLog("Caretaker dashboard monitoring started.");
+initializeDueDatePicker();
 evaluateTaskStatuses();
 render();
 
