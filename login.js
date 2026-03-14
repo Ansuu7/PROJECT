@@ -37,7 +37,7 @@ loginForm.addEventListener("submit", async (event) => {
             return;
         }
 
-        window.location.href = data.redirectTo || "/dashboard";
+        window.location.href = data.redirectTo || "/";
     } catch (error) {
         loginError.textContent = "Unable to login right now.";
     }

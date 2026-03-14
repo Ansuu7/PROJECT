@@ -44,7 +44,7 @@ const caretakerMessageInput = document.getElementById("caretakerMessageInput");
 const apiBase = (window.APP_CONFIG && window.APP_CONFIG.API_BASE ? window.APP_CONFIG.API_BASE : "").replace(/\/$/, "");
 const loginPageHref = window.location.pathname.endsWith("/index.html")
     ? "./login.html"
-    : "/";
+    : "/login";
 
 let taskDuePicker = null;
 

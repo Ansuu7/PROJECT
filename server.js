@@ -99,7 +99,15 @@ app.use(
 );
 
 app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "login.html"));
+    res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get("/login", (req, res) => {
+    if (req.session.user) {
+        return res.redirect("/");
+    }
+
+    return res.sendFile(path.join(__dirname, "login.html"));
 });
 
 app.get("/healthz", (_req, res) => {
@@ -108,10 +116,10 @@ app.get("/healthz", (_req, res) => {
 
 app.get("/dashboard", (req, res) => {
     if (!req.session.user) {
-        return res.redirect("/");
+        return res.redirect("/login");
     }
 
-    return res.sendFile(path.join(__dirname, "index.html"));
+    return res.redirect("/");
 });
 
 app.use(express.static(__dirname, { index: false }));
@@ -141,7 +149,7 @@ app.post("/api/login", async (req, res) => {
 
     return res.json({
         user: req.session.user,
-        redirectTo: "/dashboard"
+        redirectTo: "/"
     });
 });
 
