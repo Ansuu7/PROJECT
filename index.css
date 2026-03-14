@@ -162,7 +162,7 @@ h2 {
 
 .task-form {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
     gap: 0.7rem;
     margin-bottom: 1rem;
     align-items: end;
@@ -258,6 +258,30 @@ select {
 .task-status.missed,
 .task-status.overdue {
     color: var(--danger);
+}
+
+.task-priority {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    display: inline-block;
+    margin-top: 0.35rem;
+}
+
+.task-priority.low {
+    background: #edf8ef;
+    color: #136d3f;
+}
+
+.task-priority.medium {
+    background: #fff8e5;
+    color: #996300;
+}
+
+.task-priority.high {
+    background: #ffe9e9;
+    color: #9f1f1f;
 }
 
 .task-actions {

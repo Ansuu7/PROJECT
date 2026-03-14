@@ -2,6 +2,7 @@ const taskForm = document.getElementById("taskForm");
 const taskType = document.getElementById("taskType");
 const taskTitle = document.getElementById("taskTitle");
 const taskDue = document.getElementById("taskDue");
+const taskPriority = document.getElementById("taskPriority");
 const taskList = document.getElementById("taskList");
 const patientTab = document.getElementById("patientTab");
 const caretakerTab = document.getElementById("caretakerTab");
@@ -46,13 +47,18 @@ const ESCALATION = {
     CRITICAL: "critical"
 };
 
+const HIGH_PRIORITY_RESPONSE_WINDOW_MS = 10 * 60 * 1000;
+
 let tasks = [
     {
         id: crypto.randomUUID(),
         type: "medication",
         title: "Blood pressure tablet",
         dueAt: getTodayAtTime(9, 0),
+        priority: "high",
         status: STATUS.PENDING,
+        deadlineAlerted: false,
+        caretakerEscalated: false,
         updatedAt: Date.now()
     },
     {
@@ -60,7 +66,10 @@ let tasks = [
         type: "water",
         title: "Drink 1 glass of water",
         dueAt: getTodayAtTime(11, 30),
+        priority: "low",
         status: STATUS.PENDING,
+        deadlineAlerted: false,
+        caretakerEscalated: false,
         updatedAt: Date.now()
     },
     {
@@ -68,7 +77,10 @@ let tasks = [
         type: "appointment",
         title: "Doctor follow-up call",
         dueAt: getTodayAtTime(17, 0),
+        priority: "medium",
         status: STATUS.PENDING,
+        deadlineAlerted: false,
+        caretakerEscalated: false,
         updatedAt: Date.now()
     }
 ];
@@ -89,16 +101,20 @@ taskForm.addEventListener("submit", (event) => {
     event.preventDefault();
 
     const selectedDueDate = getSelectedDueDate();
-    if (!selectedDueDate) {
+    const titleValue = taskTitle.value.trim();
+    if (!selectedDueDate || !titleValue) {
         return;
     }
 
     const newTask = {
         id: crypto.randomUUID(),
         type: taskType.value,
-        title: taskTitle.value.trim(),
+        title: titleValue,
         dueAt: selectedDueDate.toISOString(),
+        priority: taskPriority.value,
         status: STATUS.PENDING,
+        deadlineAlerted: false,
+        caretakerEscalated: false,
         updatedAt: Date.now()
     };
 
@@ -139,6 +155,8 @@ taskList.addEventListener("click", (event) => {
 
     if (action === "reset") {
         selectedTask.status = STATUS.PENDING;
+        selectedTask.deadlineAlerted = false;
+        selectedTask.caretakerEscalated = false;
         selectedTask.updatedAt = Date.now();
         addNotification(`Task reset to pending: ${selectedTask.title}`);
     }
@@ -193,32 +211,65 @@ function evaluateTaskStatuses() {
         }
 
         const due = new Date(task.dueAt).getTime();
-        if (now > due + 30 * 60 * 1000) {
-            return { ...task, status: STATUS.OVERDUE };
+        const highPriority = isHighPriority(task);
+
+        if (highPriority && now >= due + HIGH_PRIORITY_RESPONSE_WINDOW_MS) {
+            const missedTask = {
+                ...task,
+                status: STATUS.MISSED
+            };
+
+            if (!task.caretakerEscalated) {
+                handleHighPriorityNoResponse(task);
+                missedTask.caretakerEscalated = true;
+                missedTask.updatedAt = Date.now();
+            }
+
+            return missedTask;
         }
 
-        return { ...task, status: STATUS.PENDING };
+        if (now >= due) {
+            const overdueTask = {
+                ...task,
+                status: STATUS.OVERDUE
+            };
+
+            if (!task.deadlineAlerted) {
+                handleTaskDeadlineExpiry(task);
+                overdueTask.deadlineAlerted = true;
+                overdueTask.updatedAt = Date.now();
+            }
+
+            return overdueTask;
+        }
+
+        return {
+            ...task,
+            status: STATUS.PENDING,
+            deadlineAlerted: task.deadlineAlerted || false,
+            caretakerEscalated: task.caretakerEscalated || false
+        };
     });
 }
 
 function updateEscalationState() {
-    const missed = tasks.filter((task) => task.status === STATUS.MISSED);
-    const overdue = tasks.filter((task) => task.status === STATUS.OVERDUE);
+    const missed = tasks.filter((task) => task.status === STATUS.MISSED && isHighPriority(task));
+    const overdue = tasks.filter((task) => task.status === STATUS.OVERDUE && isHighPriority(task));
     const missedMedication = tasks.some(
-        (task) => task.type === "medication" && task.status === STATUS.MISSED
+        (task) => task.type === "medication" && task.status === STATUS.MISSED && isHighPriority(task)
     );
 
     let level = ESCALATION.NORMAL;
     let reason = "All critical routines are on track.";
     let caretakerMessage = "No action needed right now.";
 
-    if (missedMedication || missed.length >= 3 || overdue.length >= 4) {
+    if (missedMedication || missed.length >= 2 || overdue.length >= 3) {
         level = ESCALATION.CRITICAL;
-        reason = "Immediate attention required for missed critical care routines.";
+        reason = "Immediate attention required for overdue or missed high-priority routines.";
         caretakerMessage = "Critical alert sent: contact user now and prepare emergency escalation.";
-    } else if (missed.length >= 1 || overdue.length >= 2) {
+    } else if (missed.length >= 1 || overdue.length >= 1) {
         level = ESCALATION.WARNING;
-        reason = "Some reminders are not being completed on time.";
+        reason = "At least one high-priority task is overdue or missed.";
         caretakerMessage = "Warning sent: caretaker follow-up requested.";
     }
 
@@ -261,7 +312,8 @@ function renderTaskList() {
 				<div class="task-top">
 					<div>
 						<p class="task-title">${escapeHtml(task.title)}</p>
-						<p class="task-meta">${readableType(task.type)} • Due ${dueText}</p>
+                        <p class="task-meta">${readableType(task.type)} • ${readablePriority(task.priority)} Priority • Due ${dueText}</p>
+                        <p class="task-priority ${normalizePriority(task.priority)}">${readablePriority(task.priority).toUpperCase()} PRIORITY</p>
 					</div>
 					<p class="task-status ${task.status}">${task.status.toUpperCase()}</p>
 				</div>
@@ -333,11 +385,14 @@ function renderNotifications() {
 
 function renderAlertsQueue() {
     const alerts = [...tasks]
-        .filter((task) => task.status === STATUS.OVERDUE || task.status === STATUS.MISSED)
+        .filter(
+            (task) =>
+                (task.status === STATUS.OVERDUE || task.status === STATUS.MISSED) && isHighPriority(task)
+        )
         .sort((a, b) => getAlertPriority(a) - getAlertPriority(b));
 
     if (!alerts.length) {
-        alertsQueue.innerHTML = "<li class='task-item'>No active alerts. Patient is on track.</li>";
+        alertsQueue.innerHTML = "<li class='task-item'>No active high-priority alerts.</li>";
         return;
     }
 
@@ -356,7 +411,7 @@ function renderAlertsQueue() {
                     <p class="task-title">${escapeHtml(task.title)}</p>
                     <p class="task-status ${task.status}">${task.status.toUpperCase()}</p>
                 </div>
-                <p class="task-meta">${readableType(task.type)} • Due ${dueText}</p>
+                <p class="task-meta">${readableType(task.type)} • ${readablePriority(task.priority)} Priority • Due ${dueText}</p>
             </li>
             `;
         })
@@ -474,19 +529,67 @@ function getTaskCounts() {
 }
 
 function getAlertPriority(task) {
-    if (task.type === "medication" && task.status === STATUS.MISSED) {
+    if (task.status === STATUS.MISSED && isHighPriority(task)) {
         return 1;
     }
 
-    if (task.status === STATUS.MISSED) {
+    if (task.type === "medication" && task.status === STATUS.MISSED) {
         return 2;
     }
 
-    if (task.type === "medication" && task.status === STATUS.OVERDUE) {
+    if (task.status === STATUS.MISSED) {
         return 3;
     }
 
-    return 4;
+    if (task.type === "medication" && task.status === STATUS.OVERDUE) {
+        return 4;
+    }
+
+    return 5;
+}
+
+function handleTaskDeadlineExpiry(task) {
+    if (isHighPriority(task)) {
+        addNotification(
+            `Patient alert: high-priority task is overdue now - ${task.title}. Complete within 10 minutes.`
+        );
+        return;
+    }
+
+    addNotification(`Patient alert: ${readablePriority(task.priority)} priority task overdue - ${task.title}.`);
+}
+
+function handleHighPriorityNoResponse(task) {
+    addCaretakerLog(
+        `AUTO ESCALATION: No response for high-priority ${readableType(task.type).toLowerCase()} task - ${task.title}.`
+    );
+    addNotification(`Caretaker informed: high-priority task marked MISSED after 10 minutes - ${task.title}.`);
+}
+
+function normalizePriority(priority) {
+    if (priority === "high" || priority === "low") {
+        return priority;
+    }
+
+    return "medium";
+}
+
+function isHighPriority(task) {
+    return normalizePriority(task.priority) === "high";
+}
+
+function readablePriority(priority) {
+    const normalized = normalizePriority(priority);
+
+    if (normalized === "high") {
+        return "High";
+    }
+
+    if (normalized === "low") {
+        return "Low";
+    }
+
+    return "Medium";
 }
 
 function readableType(type) {
@@ -560,8 +663,5 @@ setInterval(() => {
 
 setInterval(() => {
     evaluateTaskStatuses();
-    renderClock();
-    renderSummary();
-    renderTaskList();
-    updateEscalationState();
-}, 30 * 1000);
+    render();
+}, 5 * 1000);
