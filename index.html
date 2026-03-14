@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digital Memory Aid System</title>
+    <link rel="stylesheet" href="index.css" />
+</head>
+
+<body>
+    <main class="app">
+        <header class="app-header">
+            <div>
+                <h1>Digital Memory Aid</h1>
+                <p class="subtitle">Medication, appointments, hydration, and caretaker escalation in one place</p>
+            </div>
+            <div class="clock-card">
+                <p class="label">Current Time</p>
+                <p id="currentTime" class="time">--:--</p>
+                <p id="currentDate" class="date">----</p>
+            </div>
+        </header>
+
+        <nav class="view-switch" aria-label="Dashboard view switch">
+            <button id="patientTab" class="btn btn-primary" type="button" aria-selected="true">Patient
+                Dashboard</button>
+            <button id="caretakerTab" class="btn" type="button" aria-selected="false">Caretaker Dashboard</button>
+        </nav>
+
+        <section id="patientDashboard" class="dashboard-view active" aria-label="Patient dashboard">
+            <section class="summary-grid" aria-label="Daily summary">
+                <article class="summary-card">
+                    <p class="label">Tasks Today</p>
+                    <p id="tasksToday" class="value">0</p>
+                </article>
+                <article class="summary-card">
+                    <p class="label">Completed</p>
+                    <p id="tasksCompleted" class="value success">0</p>
+                </article>
+                <article class="summary-card">
+                    <p class="label">Pending / Overdue</p>
+                    <p id="tasksPending" class="value warning">0</p>
+                </article>
+                <article class="summary-card">
+                    <p class="label">Missed</p>
+                    <p id="tasksMissed" class="value danger">0</p>
+                </article>
+            </section>
+
+            <section class="grid">
+                <section class="panel" aria-labelledby="taskPanelTitle">
+                    <div class="panel-header">
+                        <h2 id="taskPanelTitle">Reminders & Tasks</h2>
+                    </div>
+
+                    <form id="taskForm" class="task-form">
+                        <label>
+                            Task Type
+                            <select id="taskType" required>
+                                <option value="medication">Medication</option>
+                                <option value="appointment">Doctor Appointment</option>
+                                <option value="water">Drink Water</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </label>
+                        <label>
+                            Task Name
+                            <input id="taskTitle" type="text" required placeholder="e.g., Blood pressure tablet"
+                                maxlength="80" />
+                        </label>
+                        <label>
+                            Due Time
+                            <input id="taskDue" type="datetime-local" required />
+                        </label>
+                        <button type="submit" class="btn btn-primary">Add Reminder</button>
+                    </form>
+
+                    <ul id="taskList" class="task-list" aria-live="polite"></ul>
+                </section>
+
+                <aside class="panel" aria-labelledby="careTitle">
+                    <div class="panel-header">
+                        <h2 id="careTitle">Patient Care Status</h2>
+                    </div>
+
+                    <article class="status-box">
+                        <p class="label">Escalation Level</p>
+                        <p id="escalationBadge" class="badge normal">Normal</p>
+                        <p id="escalationReason" class="status-text">All critical routines are on track.</p>
+                    </article>
+
+                    <article class="status-box">
+                        <p class="label">Primary Caretaker</p>
+                        <p class="caretaker-name">Anita Sharma</p>
+                        <p id="caretakerUpdate" class="status-text">No action needed right now.</p>
+                        <button id="manualCheckIn" class="btn btn-secondary" type="button">Send Manual Check-In</button>
+                    </article>
+
+                    <article class="status-box">
+                        <p class="label">Notification Feed</p>
+                        <ul id="notificationFeed" class="notification-feed" aria-live="polite"></ul>
+                    </article>
+                </aside>
+            </section>
+        </section>
+
+        <section id="caretakerDashboard" class="dashboard-view" aria-label="Caretaker dashboard">
+            <section class="summary-grid" aria-label="Caretaker daily summary">
+                <article class="summary-card">
+                    <p class="label">Patient Tasks</p>
+                    <p id="careTasksTotal" class="value">0</p>
+                </article>
+                <article class="summary-card">
+                    <p class="label">Completed</p>
+                    <p id="careTasksCompleted" class="value success">0</p>
+                </article>
+                <article class="summary-card">
+                    <p class="label">Overdue</p>
+                    <p id="careTasksOverdue" class="value warning">0</p>
+                </article>
+                <article class="summary-card">
+                    <p class="label">Missed</p>
+                    <p id="careTasksMissed" class="value danger">0</p>
+                </article>
+            </section>
+
+            <section class="grid caretaker-grid">
+                <section class="panel" aria-labelledby="alertsTitle">
+                    <div class="panel-header">
+                        <h2 id="alertsTitle">Alerts Queue</h2>
+                    </div>
+                    <ul id="alertsQueue" class="task-list" aria-live="polite"></ul>
+
+                    <div class="panel-header timeline-header">
+                        <h2 id="timelineTitle">Patient Timeline</h2>
+                    </div>
+                    <ul id="patientTimeline" class="notification-feed" aria-live="polite"></ul>
+                </section>
+
+                <aside class="panel" aria-labelledby="caretakerOpsTitle">
+                    <div class="panel-header">
+                        <h2 id="caretakerOpsTitle">Caretaker Operations</h2>
+                    </div>
+
+                    <article class="status-box">
+                        <p class="label">Risk Status</p>
+                        <p id="careEscalationBadge" class="badge normal">Normal</p>
+                        <p id="careEscalationReason" class="status-text">All critical routines are on track.</p>
+                    </article>
+
+                    <article class="status-box">
+                        <p class="label">Quick Actions</p>
+                        <div id="quickActions" class="quick-actions">
+                            <button class="btn btn-secondary" type="button" data-care-action="call">Call
+                                Patient</button>
+                            <button class="btn btn-secondary" type="button" data-care-action="message">Send Reminder
+                                Message</button>
+                            <button class="btn btn-secondary" type="button" data-care-action="family">Notify
+                                Family</button>
+                            <button class="btn btn-secondary" type="button" data-care-action="escalate">Escalate
+                                Emergency</button>
+                        </div>
+                    </article>
+
+                    <article class="status-box">
+                        <p class="label">Communication Log</p>
+                        <ul id="communicationLog" class="notification-feed" aria-live="polite"></ul>
+                    </article>
+                </aside>
+            </section>
+        </section>
+    </main>
+    <script src="index.js"></script>
+</body>
+
+</html>
